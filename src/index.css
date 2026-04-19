@@ -556,6 +556,107 @@ input, textarea, select { font-family: inherit; font-size: 16px; color: var(--te
   padding-top: 10px;
 }
 
+/* Simple (dad-friendly) form */
+.simple-section {
+  background: var(--surface);
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow);
+  padding: 16px;
+  margin-bottom: 14px;
+}
+.simple-label {
+  display: block;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin: 6px 0 6px;
+}
+.simple-label:first-child { margin-top: 0; }
+.input-big {
+  padding: 16px 16px;
+  font-size: 17px;
+  margin-bottom: 12px;
+}
+
+.simple-item {
+  margin-bottom: 14px;
+  padding-bottom: 14px;
+  border-bottom: 1px dashed var(--border);
+}
+.simple-item:last-of-type {
+  border-bottom: none;
+  margin-bottom: 10px;
+  padding-bottom: 0;
+}
+.price-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.price-prefix {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--muted);
+  padding-left: 4px;
+}
+.price-input {
+  flex: 1;
+  text-align: right;
+  font-size: 20px;
+  font-weight: 700;
+  margin-bottom: 0;
+}
+.icon-remove {
+  width: 42px; height: 42px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: #fff;
+  color: var(--danger);
+  font-size: 22px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.big-totals {
+  padding: 20px 18px;
+}
+.big-totals .totals-grand {
+  font-size: 22px;
+  padding-top: 14px;
+}
+.big-totals .totals-grand .accent { font-size: 24px; }
+
+.btn-soft {
+  background: #eff6ff;
+  color: var(--primary);
+  border: 1px dashed #93c5fd;
+}
+.btn-soft:active { background: #dbeafe; }
+.btn-xl {
+  padding: 20px 18px;
+  font-size: 19px;
+  border-radius: 16px;
+}
+
+.more-options summary {
+  cursor: pointer;
+  padding: 10px 0;
+  color: var(--muted);
+  font-weight: 600;
+  list-style: none;
+}
+.more-options summary::-webkit-details-marker { display: none; }
+.more-options summary::before {
+  content: "▸ ";
+  display: inline-block;
+  transition: transform 0.15s;
+}
+.more-options[open] summary::before { transform: rotate(90deg); }
+.more-options[open] summary { margin-bottom: 8px; }
+
 /* Print */
 @media print {
   body { background: #fff; }

@@ -74,13 +74,19 @@ const uid = () => Math.random().toString(36).slice(2, 10)
 // ---------- totals ----------
 function calcTotals(items = []) {
   const subtotal = items.reduce((sum, it) => {
-    const q = +it.qty || 0
+    const q = it.qty == null || it.qty === '' ? 1 : +it.qty
     const p = +it.price || 0
-    return sum + q * p
+    return sum + (Number.isFinite(q) ? q : 1) * p
   }, 0)
   const gst = +(subtotal * GST_RATE).toFixed(2)
   const total = +(subtotal + gst).toFixed(2)
   return { subtotal: +subtotal.toFixed(2), gst, total }
+}
+
+function lineAmount(it) {
+  const q = it.qty == null || it.qty === '' ? 1 : +it.qty
+  const p = +it.price || 0
+  return (Number.isFinite(q) ? q : 1) * p
 }
 
 // ---------- status ----------
@@ -135,7 +141,7 @@ export default function App() {
       invoiceNumber: null,
       client: { name: '', email: '', phone: '', address: '' },
       jobTitle: '',
-      items: [{ id: uid(), description: '', qty: 1, price: 0 }],
+      items: [{ id: uid(), description: '', price: '' }],
       photos: [],
       notes: '',
       terms: 'Quote valid for 30 days. Prices subject to change after expiry.',
@@ -319,6 +325,10 @@ function StatusBadge({ status }) {
 //                    QUOTE EDITOR
 // ==================================================
 function QuoteEditor({ job, business, onChange, onBack, onDelete }) {
+  const [showContact, setShowContact] = useState(
+    Boolean(job.client.phone || job.client.email),
+  )
+
   const update = (patch) => onChange({ ...job, ...patch })
   const updateClient = (patch) => onChange({ ...job, client: { ...job.client, ...patch } })
 
@@ -327,7 +337,7 @@ function QuoteEditor({ job, business, onChange, onBack, onDelete }) {
     onChange({ ...job, items })
   }
   const addItem = () =>
-    onChange({ ...job, items: [...job.items, { id: uid(), description: '', qty: 1, price: 0 }] })
+    onChange({ ...job, items: [...job.items, { id: uid(), description: '', price: '' }] })
   const removeItem = (id) =>
     onChange({ ...job, items: job.items.filter((it) => it.id !== id) })
 
@@ -350,33 +360,35 @@ function QuoteEditor({ job, business, onChange, onBack, onDelete }) {
 
   const totals = calcTotals(job.items)
 
-  const sendEmail = () => {
-    const subject = encodeURIComponent(
-      `Quote #${job.quoteNumber} from ${business.name}`,
-    )
+  const buildQuoteText = () => {
     const lines = [
       `Hi ${job.client.name || ''},`,
       '',
-      `Please find below your quote for: ${job.jobTitle || 'Painting work'}.`,
+      `Quote for: ${job.jobTitle || 'Painting work'}`,
+      job.client.address ? `Address: ${job.client.address}` : '',
       '',
-      ...job.items.map(
-        (it) => `- ${it.description} — ${it.qty} × ${money(it.price)} = ${money((+it.qty || 0) * (+it.price || 0))}`,
-      ),
+      ...job.items
+        .filter((it) => it.description || it.price)
+        .map((it) => `- ${it.description || 'Item'}: ${money(lineAmount(it))}`),
       '',
       `Subtotal: ${money(totals.subtotal)}`,
       `GST (10%): ${money(totals.gst)}`,
-      `Total: ${money(totals.total)}`,
+      `Total (inc. GST): ${money(totals.total)}`,
       '',
       `Valid until: ${fmtDateLong(job.expiryDate)}`,
-      '',
       job.terms,
       '',
-      `Thanks,`,
-      `${business.name}`,
+      'Thanks,',
+      business.name,
       business.phone ? `Phone: ${business.phone}` : '',
       business.email ? `Email: ${business.email}` : '',
     ].filter(Boolean)
-    const body = encodeURIComponent(lines.join('\n'))
+    return lines.join('\n')
+  }
+
+  const sendEmail = () => {
+    const subject = encodeURIComponent(`Quote from ${business.name}`)
+    const body = encodeURIComponent(buildQuoteText())
     const to = encodeURIComponent(job.client.email || '')
     onChange({ ...job, quoteSentAt: new Date().toISOString(), status: 'Quote Sent' })
     window.location.href = `mailto:${to}?subject=${subject}&body=${body}`
@@ -384,153 +396,153 @@ function QuoteEditor({ job, business, onChange, onBack, onDelete }) {
 
   return (
     <div className="screen">
-      <TopBar title={`Quote #${job.quoteNumber}`} onBack={onBack} />
+      <TopBar title="New Quote" onBack={onBack} />
 
-      <section className="section">
-        <h3>Client</h3>
+      <section className="simple-section">
+        <label className="simple-label">Name</label>
         <input
-          className="input"
-          placeholder="Client name"
+          className="input input-big"
+          placeholder="Customer name"
           value={job.client.name}
           onChange={(e) => updateClient({ name: e.target.value })}
         />
+
+        <label className="simple-label">Address</label>
         <input
-          className="input"
-          placeholder="Email"
-          type="email"
-          value={job.client.email}
-          onChange={(e) => updateClient({ email: e.target.value })}
-        />
-        <input
-          className="input"
-          placeholder="Phone"
-          type="tel"
-          value={job.client.phone}
-          onChange={(e) => updateClient({ phone: e.target.value })}
-        />
-        <input
-          className="input"
-          placeholder="Address"
+          className="input input-big"
+          placeholder="Street, suburb"
           value={job.client.address || ''}
           onChange={(e) => updateClient({ address: e.target.value })}
         />
+
+        {!showContact ? (
+          <button className="btn btn-soft" onClick={() => setShowContact(true)}>
+            + Add phone / email
+          </button>
+        ) : (
+          <>
+            <label className="simple-label">Phone</label>
+            <input
+              className="input input-big"
+              placeholder="Phone"
+              type="tel"
+              value={job.client.phone}
+              onChange={(e) => updateClient({ phone: e.target.value })}
+            />
+            <label className="simple-label">Email</label>
+            <input
+              className="input input-big"
+              placeholder="Email"
+              type="email"
+              value={job.client.email}
+              onChange={(e) => updateClient({ email: e.target.value })}
+            />
+          </>
+        )}
       </section>
 
-      <section className="section">
-        <h3>Job</h3>
+      <section className="simple-section">
+        <label className="simple-label">Job</label>
         <input
-          className="input"
-          placeholder="Job title / description"
+          className="input input-big"
+          placeholder="What is the job?"
           value={job.jobTitle}
           onChange={(e) => update({ jobTitle: e.target.value })}
         />
       </section>
 
-      <section className="section">
-        <h3>Line items</h3>
-        {job.items.map((it) => {
-          const lineTotal = (+it.qty || 0) * (+it.price || 0)
-          return (
-            <div key={it.id} className="line-item">
+      <section className="simple-section">
+        <label className="simple-label">Items &amp; prices</label>
+        {job.items.map((it, idx) => (
+          <div key={it.id} className="simple-item">
+            <input
+              className="input input-big"
+              placeholder={`Item ${idx + 1}`}
+              value={it.description}
+              onChange={(e) => updateItem(it.id, { description: e.target.value })}
+            />
+            <div className="price-row">
+              <span className="price-prefix">$</span>
               <input
-                className="input"
-                placeholder="Description (e.g. Exterior paint — 2 coats)"
-                value={it.description}
-                onChange={(e) => updateItem(it.id, { description: e.target.value })}
+                className="input input-big price-input"
+                type="number"
+                inputMode="decimal"
+                min="0"
+                step="0.01"
+                placeholder="0.00"
+                value={it.price}
+                onChange={(e) => updateItem(it.id, { price: e.target.value })}
               />
-              <div className="line-row">
-                <label className="field">
-                  <span>Qty</span>
-                  <input
-                    className="input input-sm"
-                    type="number"
-                    inputMode="decimal"
-                    min="0"
-                    step="0.01"
-                    value={it.qty}
-                    onChange={(e) => updateItem(it.id, { qty: e.target.value })}
-                  />
-                </label>
-                <label className="field">
-                  <span>Unit price</span>
-                  <input
-                    className="input input-sm"
-                    type="number"
-                    inputMode="decimal"
-                    min="0"
-                    step="0.01"
-                    value={it.price}
-                    onChange={(e) => updateItem(it.id, { price: e.target.value })}
-                  />
-                </label>
-                <div className="line-total">{money(lineTotal)}</div>
-              </div>
               {job.items.length > 1 && (
-                <button className="btn btn-link btn-danger" onClick={() => removeItem(it.id)}>
-                  Remove item
+                <button
+                  className="icon-remove"
+                  aria-label="Remove item"
+                  onClick={() => removeItem(it.id)}
+                >
+                  ×
                 </button>
               )}
             </div>
-          )
-        })}
-        <button className="btn btn-secondary" onClick={addItem}>+ Add line item</button>
-
-        <div className="totals">
-          <div className="totals-row"><span>Subtotal</span><span>{money(totals.subtotal)}</span></div>
-          <div className="totals-row"><span>GST (10%)</span><span>{money(totals.gst)}</span></div>
-          <div className="totals-row totals-grand"><span>Total</span><span>{money(totals.total)}</span></div>
-        </div>
+          </div>
+        ))}
+        <button className="btn btn-soft btn-lg" onClick={addItem}>+ Add another item</button>
       </section>
 
-      <section className="section">
-        <h3>Expiry</h3>
-        <input
-          className="input"
-          type="date"
-          value={job.expiryDate}
-          onChange={(e) => update({ expiryDate: e.target.value })}
-        />
-        <textarea
-          className="input textarea"
-          rows={2}
-          value={job.terms}
-          onChange={(e) => update({ terms: e.target.value })}
-        />
+      <section className="simple-section big-totals">
+        <div className="totals-row"><span>Subtotal</span><span>{money(totals.subtotal)}</span></div>
+        <div className="totals-row"><span>GST (10%)</span><span>{money(totals.gst)}</span></div>
+        <div className="totals-row totals-grand"><span>Total</span><span className="accent">{money(totals.total)}</span></div>
       </section>
 
-      <section className="section">
-        <h3>Photos</h3>
-        <label className="btn btn-secondary file-btn">
-          + Add photos
+      <section className="simple-section">
+        <details className="more-options">
+          <summary>More options</summary>
+          <label className="simple-label">Quote expires</label>
           <input
-            type="file"
-            accept="image/*"
-            multiple
-            onChange={(e) => { addPhotos(e.target.files); e.target.value = '' }}
-            style={{ display: 'none' }}
+            className="input"
+            type="date"
+            value={job.expiryDate}
+            onChange={(e) => update({ expiryDate: e.target.value })}
           />
-        </label>
-        <div className="photo-grid">
-          {(job.photos || []).map((p) => (
-            <div key={p.id} className="photo">
-              <img src={p.data} alt={p.name} />
-              <button className="photo-remove" onClick={() => removePhoto(p.id)}>×</button>
-            </div>
-          ))}
-        </div>
+          <label className="simple-label">Terms</label>
+          <textarea
+            className="input textarea"
+            rows={2}
+            value={job.terms}
+            onChange={(e) => update({ terms: e.target.value })}
+          />
+          <label className="btn btn-soft file-btn">
+            + Add photos
+            <input
+              type="file"
+              accept="image/*"
+              multiple
+              onChange={(e) => { addPhotos(e.target.files); e.target.value = '' }}
+              style={{ display: 'none' }}
+            />
+          </label>
+          <div className="photo-grid">
+            {(job.photos || []).map((p) => (
+              <div key={p.id} className="photo">
+                <img src={p.data} alt={p.name} />
+                <button className="photo-remove" onClick={() => removePhoto(p.id)}>×</button>
+              </div>
+            ))}
+          </div>
+        </details>
       </section>
 
-      <section className="section">
-        <button className="btn btn-primary btn-lg" onClick={sendEmail}>
-          Send quote by email
+      <section className="simple-section">
+        <button className="btn btn-primary btn-xl" onClick={sendEmail}>
+          ✉ Send Quote
         </button>
-        <button className="btn btn-secondary" onClick={onBack}>
-          Save & close
+        <button className="btn btn-secondary btn-lg" onClick={onBack}>
+          Save
         </button>
         <button className="btn btn-link btn-danger" onClick={() => {
-          if (confirm('Delete this quote permanently?')) onDelete()
+          if (confirm('Delete this quote?')) onDelete()
         }}>
-          Delete quote
+          Delete
         </button>
       </section>
     </div>
@@ -544,22 +556,22 @@ function JobDetail({ job, business, onChange, onBack, onEditQuote, onInvoice, on
   const totals = calcTotals(job.items)
 
   const sendQuoteEmail = () => {
-    const subject = encodeURIComponent(`Quote #${job.quoteNumber} from ${business.name}`)
+    const subject = encodeURIComponent(`Quote from ${business.name}`)
     const lines = [
       `Hi ${job.client.name || ''},`,
       '',
-      `Please find below your quote for: ${job.jobTitle || 'Painting work'}.`,
+      `Quote for: ${job.jobTitle || 'Painting work'}`,
+      job.client.address ? `Address: ${job.client.address}` : '',
       '',
-      ...job.items.map(
-        (it) => `- ${it.description} — ${it.qty} × ${money(it.price)} = ${money((+it.qty || 0) * (+it.price || 0))}`,
-      ),
+      ...job.items
+        .filter((it) => it.description || it.price)
+        .map((it) => `- ${it.description || 'Item'}: ${money(lineAmount(it))}`),
       '',
       `Subtotal: ${money(totals.subtotal)}`,
       `GST (10%): ${money(totals.gst)}`,
-      `Total: ${money(totals.total)}`,
+      `Total (inc. GST): ${money(totals.total)}`,
       '',
       `Valid until: ${fmtDateLong(job.expiryDate)}`,
-      '',
       job.terms,
       '',
       'Thanks,',
@@ -600,15 +612,21 @@ function JobDetail({ job, business, onChange, onBack, onEditQuote, onInvoice, on
 
       <section className="card">
         <div className="card-label">LINE ITEMS</div>
-        {job.items.map((it) => (
-          <div key={it.id} className="line-detail">
-            <div className="line-detail-main">
-              <div className="line-detail-desc">{it.description || '(no description)'}</div>
-              <div className="line-detail-sub">{it.qty} × {money(it.price)}</div>
+        {job.items.map((it) => {
+          const q = it.qty == null || it.qty === '' ? 1 : +it.qty
+          const showQty = Number.isFinite(q) && q !== 1
+          return (
+            <div key={it.id} className="line-detail">
+              <div className="line-detail-main">
+                <div className="line-detail-desc">{it.description || '(no description)'}</div>
+                {showQty && (
+                  <div className="line-detail-sub">{q} × {money(it.price)}</div>
+                )}
+              </div>
+              <div className="line-detail-amount">{money(lineAmount(it))}</div>
             </div>
-            <div className="line-detail-amount">{money((+it.qty || 0) * (+it.price || 0))}</div>
-          </div>
-        ))}
+          )
+        })}
         <div className="card-sep" />
         <div className="totals-row"><span>Subtotal</span><span>{money(totals.subtotal)}</span></div>
         <div className="totals-row"><span>GST (10%)</span><span>{money(totals.gst)}</span></div>
@@ -721,31 +739,43 @@ function InvoiceView({ job, business, onBack }) {
           <div>{job.jobTitle}</div>
         </div>
 
-        <table className="invoice-table">
-          <thead>
-            <tr>
-              <th>Description</th>
-              <th className="num">Qty</th>
-              <th className="num">Unit</th>
-              <th className="num">Line total</th>
-            </tr>
-          </thead>
-          <tbody>
-            {job.items.map((it) => (
-              <tr key={it.id}>
-                <td>{it.description}</td>
-                <td className="num">{it.qty}</td>
-                <td className="num">{money(it.price)}</td>
-                <td className="num">{money((+it.qty || 0) * (+it.price || 0))}</td>
-              </tr>
-            ))}
-          </tbody>
-          <tfoot>
-            <tr><td colSpan={3} className="num">Subtotal</td><td className="num">{money(totals.subtotal)}</td></tr>
-            <tr><td colSpan={3} className="num">GST (10%)</td><td className="num">{money(totals.gst)}</td></tr>
-            <tr className="grand"><td colSpan={3} className="num">Total (incl. GST)</td><td className="num">{money(totals.total)}</td></tr>
-          </tfoot>
-        </table>
+        {(() => {
+          const hasQty = job.items.some((it) => {
+            const q = it.qty == null || it.qty === '' ? 1 : +it.qty
+            return Number.isFinite(q) && q !== 1
+          })
+          const cols = hasQty ? 4 : 2
+          return (
+            <table className="invoice-table">
+              <thead>
+                <tr>
+                  <th>Description</th>
+                  {hasQty && <th className="num">Qty</th>}
+                  {hasQty && <th className="num">Unit</th>}
+                  <th className="num">Amount</th>
+                </tr>
+              </thead>
+              <tbody>
+                {job.items.map((it) => {
+                  const q = it.qty == null || it.qty === '' ? 1 : +it.qty
+                  return (
+                    <tr key={it.id}>
+                      <td>{it.description}</td>
+                      {hasQty && <td className="num">{q}</td>}
+                      {hasQty && <td className="num">{money(it.price)}</td>}
+                      <td className="num">{money(lineAmount(it))}</td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+              <tfoot>
+                <tr><td colSpan={cols - 1} className="num">Subtotal</td><td className="num">{money(totals.subtotal)}</td></tr>
+                <tr><td colSpan={cols - 1} className="num">GST (10%)</td><td className="num">{money(totals.gst)}</td></tr>
+                <tr className="grand"><td colSpan={cols - 1} className="num">Total (incl. GST)</td><td className="num">{money(totals.total)}</td></tr>
+              </tfoot>
+            </table>
+          )
+        })()}
 
         <div className="invoice-section">
           <div className="label">Payment terms</div>
