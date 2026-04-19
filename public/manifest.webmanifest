@@ -1,0 +1,12 @@
+{
+  "name": "C&K Painting — Quote & Job Manager",
+  "short_name": "C&K Painting",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#2563eb",
+  "orientation": "portrait",
+  "icons": [
+    { "src": "./icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}
