@@ -146,6 +146,64 @@ function openQuoteEmail(job, business, totals) {
   window.location.href = `mailto:${to}?subject=${subject}&body=${body}`
 }
 
+function buildInvoiceEmailBody(job, business, totals) {
+  const items = job.items.filter((it) => it.description || it.price)
+  const invoiceDate = job.invoicedAt ? job.invoicedAt.slice(0, 10) : todayISO()
+  const dueDate = addDaysISO(invoiceDate, 14)
+  const lines = [
+    `Hi ${job.client.name || 'there'},`,
+    '',
+    'Thank you for your business. Please find your invoice below.',
+    '',
+    '----------------------------------------',
+    `INVOICE #${job.invoiceNumber}`,
+    '----------------------------------------',
+    `Date: ${fmtDateLong(invoiceDate)}`,
+    `Due:  ${fmtDateLong(dueDate)}`,
+    '',
+    '----------------------------------------',
+    `JOB`,
+    '----------------------------------------',
+    job.jobTitle ? job.jobTitle : null,
+    job.client.address ? `At: ${job.client.address}` : null,
+    '',
+    '----------------------------------------',
+    `ITEMS`,
+    '----------------------------------------',
+    ...items.map((it) => `• ${it.description || 'Item'} — ${money(lineAmount(it))}`),
+    '',
+    '----------------------------------------',
+    `PRICING`,
+    '----------------------------------------',
+    `Subtotal:        ${money(totals.subtotal)}`,
+    `GST (10%):       ${money(totals.gst)}`,
+    `TOTAL (inc GST): ${money(totals.total)}`,
+    '',
+    '----------------------------------------',
+    `PAYMENT`,
+    '----------------------------------------',
+    'Payment due within 14 days.',
+    business.bsb ? `BSB: ${business.bsb}` : null,
+    business.account ? `Account: ${business.account}` : null,
+    business.paymentMethods ? `Accepted: ${business.paymentMethods}` : null,
+    '',
+    'Please reply if you have any questions.',
+    '',
+    'Kind regards,',
+    business.name,
+    business.phone ? `Phone: ${business.phone}` : null,
+    business.email ? `Email: ${business.email}` : null,
+  ].filter((l) => l !== null && l !== undefined)
+  return lines.join('\r\n')
+}
+
+function openInvoiceEmail(job, business, totals) {
+  const subject = encodeURIComponent(`Invoice #${job.invoiceNumber} from ${business.name || 'C&K Painting Group'}`)
+  const body = encodeURIComponent(buildInvoiceEmailBody(job, business, totals))
+  const to = encodeURIComponent(job.client.email || '')
+  window.location.href = `mailto:${to}?subject=${subject}&body=${body}`
+}
+
 // ---------- status ----------
 const STATUSES = ['Quote Sent', 'Approved', 'In Progress', 'Completed', 'Invoiced']
 const STATUS_COLORS = {
@@ -216,6 +274,34 @@ export default function App() {
     setView({ name: 'quote', jobId: id })
   }
 
+  const newInvoice = () => {
+    const id = uid()
+    const invoiceNumber = state.nextInvoiceNumber
+    const job = {
+      id,
+      quoteNumber: state.nextQuoteNumber,
+      invoiceNumber,
+      client: { name: '', email: '', phone: '', address: '' },
+      jobTitle: '',
+      items: [{ id: uid(), description: '', price: '' }],
+      photos: [],
+      notes: '',
+      terms: '',
+      expiryDate: '',
+      createdAt: new Date().toISOString(),
+      quoteSentAt: null,
+      invoicedAt: new Date().toISOString(),
+      status: 'Invoiced',
+    }
+    setState((s) => ({
+      ...s,
+      nextInvoiceNumber: s.nextInvoiceNumber + 1,
+      nextQuoteNumber: s.nextQuoteNumber + 1,
+    }))
+    upsertJob(job)
+    setView({ name: 'quote', jobId: id })
+  }
+
   const openJob = (id) => setView({ name: 'job', jobId: id })
   const currentJob = view.jobId ? state.jobs.find((j) => j.id === view.jobId) : null
 
@@ -225,6 +311,7 @@ export default function App() {
         <JobsList
           state={state}
           onNewQuote={newQuote}
+          onNewInvoice={newInvoice}
           onOpen={openJob}
         />
       )}
@@ -234,6 +321,7 @@ export default function App() {
           business={state.business}
           onChange={upsertJob}
           onBack={() => setView({ name: 'list' })}
+          onViewInvoice={() => setView({ name: 'invoice', jobId: currentJob.id })}
           onDelete={() => { deleteJob(currentJob.id); setView({ name: 'list' }) }}
         />
       )}
@@ -292,7 +380,7 @@ export default function App() {
 // ==================================================
 //                    JOBS LIST
 // ==================================================
-function JobsList({ state, onNewQuote, onOpen }) {
+function JobsList({ state, onNewQuote, onNewInvoice, onOpen }) {
   const [filter, setFilter] = useState('all') // all | active | followup | invoiced
   const { jobs, business } = state
 
@@ -315,9 +403,14 @@ function JobsList({ state, onNewQuote, onOpen }) {
       <div className="header">
         <h1>C&K Painting</h1>
         <div className="subtitle">Quote & Job Manager</div>
-        <button className="btn btn-primary btn-lg" onClick={onNewQuote}>
-          <span className="plus">+</span> New Quote
-        </button>
+        <div className="new-buttons">
+          <button className="btn btn-primary btn-lg new-btn" onClick={onNewQuote}>
+            <span className="plus">+</span> New Quote
+          </button>
+          <button className="btn btn-secondary btn-lg new-btn" onClick={onNewInvoice}>
+            <span className="plus">+</span> New Invoice
+          </button>
+        </div>
       </div>
 
       <div className="filters">
@@ -389,7 +482,11 @@ function StatusBadge({ status }) {
 // ==================================================
 //                    QUOTE EDITOR
 // ==================================================
-function QuoteEditor({ job, business, onChange, onBack, onDelete }) {
+function QuoteEditor({ job, business, onChange, onBack, onViewInvoice, onDelete }) {
+  const isInvoice = job.status === 'Invoiced' && Boolean(job.invoiceNumber)
+  const noun = isInvoice ? 'invoice' : 'quote'
+  const Noun = isInvoice ? 'Invoice' : 'Quote'
+
   const [showContact, setShowContact] = useState(
     Boolean(job.client.phone || job.client.email),
   )
@@ -426,13 +523,20 @@ function QuoteEditor({ job, business, onChange, onBack, onDelete }) {
   const totals = calcTotals(job.items)
 
   const sendEmail = () => {
-    onChange({ ...job, quoteSentAt: new Date().toISOString(), status: 'Quote Sent' })
-    openQuoteEmail(job, business, totals)
+    if (isInvoice) {
+      openInvoiceEmail(job, business, totals)
+    } else {
+      onChange({ ...job, quoteSentAt: new Date().toISOString(), status: 'Quote Sent' })
+      openQuoteEmail(job, business, totals)
+    }
   }
 
   return (
     <div className="screen">
-      <TopBar title="New Quote" onBack={onBack} />
+      <TopBar
+        title={isInvoice ? `Invoice #${job.invoiceNumber}` : 'New Quote'}
+        onBack={onBack}
+      />
 
       <section className="simple-section">
         <label className="simple-label">Name</label>
@@ -533,20 +637,24 @@ function QuoteEditor({ job, business, onChange, onBack, onDelete }) {
       <section className="simple-section">
         <details className="more-options">
           <summary>More options</summary>
-          <label className="simple-label">Quote expires</label>
-          <input
-            className="input"
-            type="date"
-            value={job.expiryDate}
-            onChange={(e) => update({ expiryDate: e.target.value })}
-          />
-          <label className="simple-label">Terms</label>
-          <textarea
-            className="input textarea"
-            rows={2}
-            value={job.terms}
-            onChange={(e) => update({ terms: e.target.value })}
-          />
+          {!isInvoice && (
+            <>
+              <label className="simple-label">Quote expires</label>
+              <input
+                className="input"
+                type="date"
+                value={job.expiryDate}
+                onChange={(e) => update({ expiryDate: e.target.value })}
+              />
+              <label className="simple-label">Terms</label>
+              <textarea
+                className="input textarea"
+                rows={2}
+                value={job.terms}
+                onChange={(e) => update({ terms: e.target.value })}
+              />
+            </>
+          )}
           <label className="btn btn-soft file-btn">
             + Add photos
             <input
@@ -570,13 +678,18 @@ function QuoteEditor({ job, business, onChange, onBack, onDelete }) {
 
       <section className="simple-section">
         <button className="btn btn-primary btn-xl" onClick={sendEmail}>
-          ✉ Send Quote
+          ✉ Send {Noun}
         </button>
+        {isInvoice && onViewInvoice && (
+          <button className="btn btn-secondary btn-lg" onClick={onViewInvoice}>
+            View / Print PDF
+          </button>
+        )}
         <button className="btn btn-secondary btn-lg" onClick={onBack}>
           Save
         </button>
         <button className="btn btn-link btn-danger" onClick={() => {
-          if (confirm('Delete this quote?')) onDelete()
+          if (confirm(`Delete this ${noun}?`)) onDelete()
         }}>
           Delete
         </button>
@@ -709,12 +822,27 @@ function InvoiceView({ job, business, onBack }) {
   const invoiceDate = job.invoicedAt ? job.invoicedAt.slice(0, 10) : todayISO()
   const dueDate = addDaysISO(invoiceDate, 14)
 
+  // Browsers derive the Save-as-PDF default filename from document.title.
+  // Set it to "Invoice <number>" just before the print dialog and restore it after.
+  const handlePrint = () => {
+    const original = document.title
+    document.title = `Invoice ${job.invoiceNumber}`
+    const restore = () => {
+      document.title = original
+      window.removeEventListener('afterprint', restore)
+    }
+    window.addEventListener('afterprint', restore)
+    // Fallback restore in case afterprint never fires (some mobile browsers)
+    setTimeout(restore, 2000)
+    window.print()
+  }
+
   return (
     <div className="screen">
       <TopBar title={`INV-${job.invoiceNumber}`} onBack={onBack} />
 
       <div className="section no-print">
-        <button className="btn btn-primary btn-lg" onClick={() => window.print()}>
+        <button className="btn btn-primary btn-lg" onClick={handlePrint}>
           Download / Print PDF
         </button>
         <p className="muted small">Use your browser's <em>Save as PDF</em> from the print dialog.</p>

@@ -95,6 +95,13 @@ input, textarea, select { font-family: inherit; font-size: 16px; color: var(--te
 }
 .btn-danger { color: var(--danger); }
 .plus { font-size: 22px; line-height: 1; margin-right: 2px; }
+
+.new-buttons {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.new-buttons .new-btn { margin-bottom: 0; }
 .mail-icon { margin-right: 2px; }
 .file-btn { cursor: pointer; }
 
