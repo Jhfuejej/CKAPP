@@ -89,6 +89,59 @@ function lineAmount(it) {
   return (Number.isFinite(q) ? q : 1) * p
 }
 
+// Build the quote email as one well-spaced plain-text block.
+// Uses CRLF and keeps empty strings as intentional blank lines so
+// mobile mail clients (Gmail on Android) don't collapse them.
+function buildQuoteEmailBody(job, business, totals) {
+  const items = job.items.filter((it) => it.description || it.price)
+  const lines = [
+    `Hi ${job.client.name || 'there'},`,
+    '',
+    `Thank you for the opportunity to quote on your painting job.`,
+    `Please find the details below.`,
+    '',
+    '----------------------------------------',
+    `JOB`,
+    '----------------------------------------',
+    job.jobTitle ? job.jobTitle : null,
+    job.client.address ? `At: ${job.client.address}` : null,
+    '',
+    '----------------------------------------',
+    `ITEMS`,
+    '----------------------------------------',
+    ...items.map((it) => `• ${it.description || 'Item'} — ${money(lineAmount(it))}`),
+    '',
+    '----------------------------------------',
+    `PRICING`,
+    '----------------------------------------',
+    `Subtotal:        ${money(totals.subtotal)}`,
+    `GST (10%):       ${money(totals.gst)}`,
+    `TOTAL (inc GST): ${money(totals.total)}`,
+    '',
+    '----------------------------------------',
+    `VALIDITY`,
+    '----------------------------------------',
+    `Valid until ${fmtDateLong(job.expiryDate)}.`,
+    job.terms,
+    '',
+    'Please reply to this email to accept the quote',
+    'or let me know if you have any questions.',
+    '',
+    'Kind regards,',
+    business.name,
+    business.phone ? `Phone: ${business.phone}` : null,
+    business.email ? `Email: ${business.email}` : null,
+  ].filter((l) => l !== null && l !== undefined)
+  return lines.join('\r\n')
+}
+
+function openQuoteEmail(job, business, totals) {
+  const subject = encodeURIComponent(`Quote from ${business.name || 'C&K Painting Group'}`)
+  const body = encodeURIComponent(buildQuoteEmailBody(job, business, totals))
+  const to = encodeURIComponent(job.client.email || '')
+  window.location.href = `mailto:${to}?subject=${subject}&body=${body}`
+}
+
 // ---------- status ----------
 const STATUSES = ['Quote Sent', 'Approved', 'In Progress', 'Completed', 'Invoiced']
 const STATUS_COLORS = {
@@ -360,38 +413,9 @@ function QuoteEditor({ job, business, onChange, onBack, onDelete }) {
 
   const totals = calcTotals(job.items)
 
-  const buildQuoteText = () => {
-    const lines = [
-      `Hi ${job.client.name || ''},`,
-      '',
-      `Quote for: ${job.jobTitle || 'Painting work'}`,
-      job.client.address ? `Address: ${job.client.address}` : '',
-      '',
-      ...job.items
-        .filter((it) => it.description || it.price)
-        .map((it) => `- ${it.description || 'Item'}: ${money(lineAmount(it))}`),
-      '',
-      `Subtotal: ${money(totals.subtotal)}`,
-      `GST (10%): ${money(totals.gst)}`,
-      `Total (inc. GST): ${money(totals.total)}`,
-      '',
-      `Valid until: ${fmtDateLong(job.expiryDate)}`,
-      job.terms,
-      '',
-      'Thanks,',
-      business.name,
-      business.phone ? `Phone: ${business.phone}` : '',
-      business.email ? `Email: ${business.email}` : '',
-    ].filter(Boolean)
-    return lines.join('\n')
-  }
-
   const sendEmail = () => {
-    const subject = encodeURIComponent(`Quote from ${business.name}`)
-    const body = encodeURIComponent(buildQuoteText())
-    const to = encodeURIComponent(job.client.email || '')
     onChange({ ...job, quoteSentAt: new Date().toISOString(), status: 'Quote Sent' })
-    window.location.href = `mailto:${to}?subject=${subject}&body=${body}`
+    openQuoteEmail(job, business, totals)
   }
 
   return (
@@ -556,33 +580,8 @@ function JobDetail({ job, business, onChange, onBack, onEditQuote, onInvoice, on
   const totals = calcTotals(job.items)
 
   const sendQuoteEmail = () => {
-    const subject = encodeURIComponent(`Quote from ${business.name}`)
-    const lines = [
-      `Hi ${job.client.name || ''},`,
-      '',
-      `Quote for: ${job.jobTitle || 'Painting work'}`,
-      job.client.address ? `Address: ${job.client.address}` : '',
-      '',
-      ...job.items
-        .filter((it) => it.description || it.price)
-        .map((it) => `- ${it.description || 'Item'}: ${money(lineAmount(it))}`),
-      '',
-      `Subtotal: ${money(totals.subtotal)}`,
-      `GST (10%): ${money(totals.gst)}`,
-      `Total (inc. GST): ${money(totals.total)}`,
-      '',
-      `Valid until: ${fmtDateLong(job.expiryDate)}`,
-      job.terms,
-      '',
-      'Thanks,',
-      business.name,
-      business.phone ? `Phone: ${business.phone}` : '',
-      business.email ? `Email: ${business.email}` : '',
-    ].filter(Boolean)
-    const body = encodeURIComponent(lines.join('\n'))
-    const to = encodeURIComponent(job.client.email || '')
     onChange({ ...job, quoteSentAt: new Date().toISOString(), status: 'Quote Sent' })
-    window.location.href = `mailto:${to}?subject=${subject}&body=${body}`
+    openQuoteEmail(job, business, totals)
   }
 
   const nextStatus = (() => {
@@ -711,12 +710,15 @@ function InvoiceView({ job, business, onBack }) {
 
       <div className="invoice-doc" id="invoice-doc">
         <div className="invoice-head">
-          <div>
-            <h2 className="biz-name">{business.name}</h2>
-            {business.abn && <div className="muted">ABN: {business.abn}</div>}
-            {business.address && <div className="muted">{business.address}</div>}
-            {business.phone && <div className="muted">{business.phone}</div>}
-            {business.email && <div className="muted">{business.email}</div>}
+          <div className="invoice-brand">
+            <img src="./logo.svg" alt={business.name} className="invoice-logo" />
+            <div className="invoice-biz">
+              <h2 className="biz-name">{business.name}</h2>
+              {business.abn && <div className="muted">ABN: {business.abn}</div>}
+              {business.address && <div className="muted">{business.address}</div>}
+              {business.phone && <div className="muted">{business.phone}</div>}
+              {business.email && <div className="muted">{business.email}</div>}
+            </div>
           </div>
           <div className="invoice-meta">
             <div className="invoice-title">TAX INVOICE</div>

@@ -519,6 +519,21 @@ input, textarea, select { font-family: inherit; font-size: 16px; color: var(--te
   padding-bottom: 16px;
   border-bottom: 2px solid var(--text);
 }
+.invoice-brand {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+}
+.invoice-logo {
+  width: 88px;
+  height: 88px;
+  border-radius: 12px;
+  background: #1e1a1a;
+  flex-shrink: 0;
+  object-fit: contain;
+}
+.invoice-biz { min-width: 0; }
 .biz-name { margin: 0 0 4px; font-size: 20px; }
 .invoice-meta { text-align: right; font-size: 14px; }
 .invoice-title {

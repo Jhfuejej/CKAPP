@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" role="img" aria-label="C&K Painting Group">
+  <rect width="400" height="400" fill="#1e1a1a"/>
+
+  <!-- Brush/flame strokes -->
+  <path d="M118 260
+           C 92 220, 100 168, 132 110
+           C 140 94, 150 88, 156 94
+           C 158 140, 152 200, 144 260 Z"
+        fill="#d94a5a"/>
+  <path d="M150 260
+           C 134 214, 148 156, 180 112
+           C 190 100, 198 102, 200 112
+           C 198 160, 188 220, 176 260 Z"
+        fill="#e08a3a"/>
+  <path d="M184 260
+           C 176 210, 196 150, 226 118
+           C 236 110, 244 114, 242 126
+           C 232 170, 214 222, 204 260 Z"
+        fill="#f0c94a"/>
+  <path d="M216 260
+           C 220 196, 256 140, 290 118
+           C 298 114, 304 120, 298 132
+           C 276 176, 246 222, 232 260 Z"
+        fill="#ffffff"/>
+
+  <!-- C & K text -->
+  <g fill="#ffffff" font-family="Georgia, 'Times New Roman', serif" font-weight="400" text-anchor="middle">
+    <text x="225" y="242" font-size="112" letter-spacing="8">C &amp; K</text>
+  </g>
+
+  <!-- PAINTING GROUP -->
+  <g fill="#c8384a" font-family="Georgia, 'Times New Roman', serif" font-size="34" letter-spacing="6" text-anchor="middle">
+    <text x="225" y="288">PAINTING GROUP</text>
+  </g>
+</svg>
