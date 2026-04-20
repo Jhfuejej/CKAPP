@@ -98,6 +98,7 @@ function lineAmount(it) {
 // mobile mail clients (Gmail on Android) don't collapse them.
 function buildQuoteEmailBody(job, business, totals) {
   const items = job.items.filter((it) => it.description || it.price)
+  const hasValidity = Boolean(job.expiryDate || (job.terms && job.terms.trim()))
   const lines = [
     `Hi ${job.client.name || 'there'},`,
     '',
@@ -122,12 +123,12 @@ function buildQuoteEmailBody(job, business, totals) {
     `GST (10%):       ${money(totals.gst)}`,
     `TOTAL (inc GST): ${money(totals.total)}`,
     '',
-    '----------------------------------------',
-    `VALIDITY`,
-    '----------------------------------------',
-    `Valid until ${fmtDateLong(job.expiryDate)}.`,
-    job.terms,
-    '',
+    hasValidity ? '----------------------------------------' : null,
+    hasValidity ? `VALIDITY` : null,
+    hasValidity ? '----------------------------------------' : null,
+    job.expiryDate ? `Valid until ${fmtDateLong(job.expiryDate)}.` : null,
+    job.terms && job.terms.trim() ? job.terms : null,
+    hasValidity ? '' : null,
     'Please reply to this email to accept the quote',
     'or let me know if you have any questions.',
     '',
@@ -149,7 +150,11 @@ function openQuoteEmail(job, business, totals) {
 function buildInvoiceEmailBody(job, business, totals) {
   const items = job.items.filter((it) => it.description || it.price)
   const invoiceDate = job.invoicedAt ? job.invoicedAt.slice(0, 10) : todayISO()
-  const dueDate = addDaysISO(invoiceDate, 14)
+  const dueDate = job.dueDate || ''
+  const termsText = job.terms && job.terms.trim() ? job.terms : ''
+  const hasPaymentBlock = Boolean(
+    termsText || business.bsb || business.account || business.paymentMethods,
+  )
   const lines = [
     `Hi ${job.client.name || 'there'},`,
     '',
@@ -159,7 +164,7 @@ function buildInvoiceEmailBody(job, business, totals) {
     `INVOICE #${job.invoiceNumber}`,
     '----------------------------------------',
     `Date: ${fmtDateLong(invoiceDate)}`,
-    `Due:  ${fmtDateLong(dueDate)}`,
+    dueDate ? `Due:  ${fmtDateLong(dueDate)}` : null,
     '',
     '----------------------------------------',
     `JOB`,
@@ -179,14 +184,14 @@ function buildInvoiceEmailBody(job, business, totals) {
     `GST (10%):       ${money(totals.gst)}`,
     `TOTAL (inc GST): ${money(totals.total)}`,
     '',
-    '----------------------------------------',
-    `PAYMENT`,
-    '----------------------------------------',
-    'Payment due within 14 days.',
+    hasPaymentBlock ? '----------------------------------------' : null,
+    hasPaymentBlock ? `PAYMENT` : null,
+    hasPaymentBlock ? '----------------------------------------' : null,
+    termsText || null,
     business.bsb ? `BSB: ${business.bsb}` : null,
     business.account ? `Account: ${business.account}` : null,
     business.paymentMethods ? `Accepted: ${business.paymentMethods}` : null,
-    '',
+    hasPaymentBlock ? '' : null,
     'Please reply if you have any questions.',
     '',
     'Kind regards,',
@@ -264,6 +269,7 @@ export default function App() {
       notes: '',
       terms: 'Quote valid for 30 days. Prices subject to change after expiry.',
       expiryDate: addDaysISO(todayISO(), 30),
+      dueDate: '',
       createdAt: new Date().toISOString(),
       quoteSentAt: null,
       status: 'Quote Sent',
@@ -286,8 +292,9 @@ export default function App() {
       items: [{ id: uid(), description: '', price: '' }],
       photos: [],
       notes: '',
-      terms: '',
+      terms: 'Payment due within 14 days.',
       expiryDate: '',
+      dueDate: addDaysISO(todayISO(), 14),
       createdAt: new Date().toISOString(),
       quoteSentAt: null,
       invoicedAt: new Date().toISOString(),
@@ -637,20 +644,59 @@ function QuoteEditor({ job, business, onChange, onBack, onViewInvoice, onDelete 
       <section className="simple-section">
         <details className="more-options">
           <summary>More options</summary>
-          {!isInvoice && (
+          {isInvoice ? (
             <>
-              <label className="simple-label">Quote expires</label>
-              <input
-                className="input"
-                type="date"
-                value={job.expiryDate}
-                onChange={(e) => update({ expiryDate: e.target.value })}
-              />
-              <label className="simple-label">Terms</label>
+              <label className="simple-label">Due date (optional)</label>
+              <div className="date-row">
+                <input
+                  className="input"
+                  type="date"
+                  value={job.dueDate || ''}
+                  onChange={(e) => update({ dueDate: e.target.value })}
+                />
+                {job.dueDate && (
+                  <button
+                    className="btn btn-soft btn-clear"
+                    onClick={() => update({ dueDate: '' })}
+                  >
+                    Clear
+                  </button>
+                )}
+              </div>
+              <label className="simple-label">Terms (optional)</label>
               <textarea
                 className="input textarea"
                 rows={2}
-                value={job.terms}
+                placeholder="Leave blank to omit"
+                value={job.terms || ''}
+                onChange={(e) => update({ terms: e.target.value })}
+              />
+            </>
+          ) : (
+            <>
+              <label className="simple-label">Quote expires (optional)</label>
+              <div className="date-row">
+                <input
+                  className="input"
+                  type="date"
+                  value={job.expiryDate || ''}
+                  onChange={(e) => update({ expiryDate: e.target.value })}
+                />
+                {job.expiryDate && (
+                  <button
+                    className="btn btn-soft btn-clear"
+                    onClick={() => update({ expiryDate: '' })}
+                  >
+                    Clear
+                  </button>
+                )}
+              </div>
+              <label className="simple-label">Terms (optional)</label>
+              <textarea
+                className="input textarea"
+                rows={2}
+                placeholder="Leave blank to omit"
+                value={job.terms || ''}
                 onChange={(e) => update({ terms: e.target.value })}
               />
             </>
@@ -757,10 +803,15 @@ function JobDetail({ job, business, onChange, onBack, onEditQuote, onInvoice, on
         <div className="totals-row totals-grand"><span>Total (inc. GST)</span><span className="accent">{money(totals.total)}</span></div>
       </section>
 
-      <section className="card">
-        <InfoRow label="EXPIRES" value={fmtDateLong(job.expiryDate)} />
-        <div className="muted small" style={{ marginTop: 6 }}>{job.terms}</div>
-      </section>
+      {(job.expiryDate || job.dueDate || (job.terms && job.terms.trim())) && (
+        <section className="card">
+          {job.expiryDate && <InfoRow label="EXPIRES" value={fmtDateLong(job.expiryDate)} />}
+          {job.dueDate && <InfoRow label="DUE" value={fmtDateLong(job.dueDate)} />}
+          {job.terms && job.terms.trim() && (
+            <div className="muted small" style={{ marginTop: 6 }}>{job.terms}</div>
+          )}
+        </section>
+      )}
 
       {(job.photos || []).length > 0 && (
         <section className="card">
@@ -820,7 +871,8 @@ function InfoRow({ label, value }) {
 function InvoiceView({ job, business, onBack }) {
   const totals = calcTotals(job.items)
   const invoiceDate = job.invoicedAt ? job.invoicedAt.slice(0, 10) : todayISO()
-  const dueDate = addDaysISO(invoiceDate, 14)
+  const dueDate = job.dueDate || ''
+  const termsText = job.terms && job.terms.trim() ? job.terms : ''
 
   // Browsers derive the Save-as-PDF default filename from document.title.
   // Set it to "Invoice <number>" just before the print dialog and restore it after.
@@ -864,7 +916,7 @@ function InvoiceView({ job, business, onBack }) {
             <div className="invoice-title">TAX INVOICE</div>
             <div><strong>Invoice #:</strong> {job.invoiceNumber}</div>
             <div><strong>Date:</strong> {fmtDateLong(invoiceDate)}</div>
-            <div><strong>Due:</strong> {fmtDateLong(dueDate)}</div>
+            {dueDate && <div><strong>Due:</strong> {fmtDateLong(dueDate)}</div>}
           </div>
         </div>
 
@@ -919,18 +971,22 @@ function InvoiceView({ job, business, onBack }) {
           )
         })()}
 
-        <div className="invoice-section">
-          <div className="label">Payment terms</div>
-          <div>Payment due within 14 days.</div>
-        </div>
+        {termsText && (
+          <div className="invoice-section">
+            <div className="label">Payment terms</div>
+            <div>{termsText}</div>
+          </div>
+        )}
 
-        <div className="invoice-section">
-          <div className="label">Payment details</div>
-          <div>{business.name}</div>
-          {business.bsb && <div>BSB: {business.bsb}</div>}
-          {business.account && <div>Account: {business.account}</div>}
-          {business.paymentMethods && <div className="muted">Accepted: {business.paymentMethods}</div>}
-        </div>
+        {(business.bsb || business.account || business.paymentMethods) && (
+          <div className="invoice-section">
+            <div className="label">Payment details</div>
+            <div>{business.name}</div>
+            {business.bsb && <div>BSB: {business.bsb}</div>}
+            {business.account && <div>Account: {business.account}</div>}
+            {business.paymentMethods && <div className="muted">Accepted: {business.paymentMethods}</div>}
+          </div>
+        )}
       </div>
     </div>
   )
