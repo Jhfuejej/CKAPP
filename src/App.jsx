@@ -160,58 +160,8 @@ function isFollowUp(job, days) {
   return job.status === 'Quote Sent' && daysSince(job.quoteSentAt || job.createdAt) >= (days || 5)
 }
 
-// ---------- inline logo (no path issues, prints crisply) ----------
-function Logo({ className }) {
-  return (
-    <svg
-      className={className}
-      xmlns="http://www.w3.org/2000/svg"
-      viewBox="0 0 400 400"
-      role="img"
-      aria-label="C&K Painting Group"
-    >
-      <rect width="400" height="400" rx="14" fill="#1e1a1a" />
-      <path
-        d="M118 270 C 92 226, 100 168, 132 108 C 142 92, 152 90, 156 100 C 158 148, 152 210, 144 270 Z"
-        fill="#d94a5a"
-      />
-      <path
-        d="M150 270 C 134 218, 150 156, 184 108 C 194 96, 202 100, 202 112 C 198 162, 188 224, 176 270 Z"
-        fill="#e08a3a"
-      />
-      <path
-        d="M186 270 C 178 212, 200 150, 230 116 C 240 108, 248 114, 244 126 C 232 172, 214 224, 204 270 Z"
-        fill="#f0c94a"
-      />
-      <path
-        d="M218 270 C 224 200, 260 142, 294 118 C 302 114, 308 122, 300 134 C 276 178, 246 224, 232 270 Z"
-        fill="#ffffff"
-      />
-      <text
-        x="225"
-        y="246"
-        textAnchor="middle"
-        fontFamily="Georgia, 'Times New Roman', serif"
-        fontSize="112"
-        fill="#ffffff"
-        letterSpacing="6"
-      >
-        C &amp; K
-      </text>
-      <text
-        x="225"
-        y="296"
-        textAnchor="middle"
-        fontFamily="Georgia, 'Times New Roman', serif"
-        fontSize="34"
-        fill="#c8384a"
-        letterSpacing="6"
-      >
-        PAINTING GROUP
-      </text>
-    </svg>
-  )
-}
+// ---------- logo asset (real PNG in /public, served with Vite base URL) ----------
+const LOGO_URL = `${import.meta.env.BASE_URL}logo.png`
 
 // ==================================================
 //                       APP
@@ -773,7 +723,7 @@ function InvoiceView({ job, business, onBack }) {
       <div className="invoice-doc" id="invoice-doc">
         <div className="invoice-head">
           <div className="invoice-brand">
-            <Logo className="invoice-logo" />
+            <img src={LOGO_URL} alt={business.name} className="invoice-logo" />
             <div className="invoice-biz">
               <h2 className="biz-name">{business.name}</h2>
               {business.abn && <div className="muted">ABN: {business.abn}</div>}
