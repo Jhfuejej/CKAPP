@@ -19,7 +19,7 @@ const defaultBusiness = {
 const defaultState = {
   business: defaultBusiness,
   jobs: [],
-  nextInvoiceNumber: 1001,
+  nextInvoiceNumber: 368,
   nextQuoteNumber: 2001,
 }
 
@@ -28,12 +28,16 @@ function loadState() {
     const raw = localStorage.getItem(LS_KEY)
     if (!raw) return defaultState
     const parsed = JSON.parse(raw)
-    return {
+    const merged = {
       ...defaultState,
       ...parsed,
       business: { ...defaultBusiness, ...(parsed.business || {}) },
       jobs: Array.isArray(parsed.jobs) ? parsed.jobs : [],
     }
+    // One-time migration: previous default of 1001 → new default 368
+    // (only when no invoices have actually been issued)
+    if (merged.nextInvoiceNumber === 1001) merged.nextInvoiceNumber = 368
+    return merged
   } catch {
     return defaultState
   }
@@ -156,6 +160,59 @@ function isFollowUp(job, days) {
   return job.status === 'Quote Sent' && daysSince(job.quoteSentAt || job.createdAt) >= (days || 5)
 }
 
+// ---------- inline logo (no path issues, prints crisply) ----------
+function Logo({ className }) {
+  return (
+    <svg
+      className={className}
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 400 400"
+      role="img"
+      aria-label="C&K Painting Group"
+    >
+      <rect width="400" height="400" rx="14" fill="#1e1a1a" />
+      <path
+        d="M118 270 C 92 226, 100 168, 132 108 C 142 92, 152 90, 156 100 C 158 148, 152 210, 144 270 Z"
+        fill="#d94a5a"
+      />
+      <path
+        d="M150 270 C 134 218, 150 156, 184 108 C 194 96, 202 100, 202 112 C 198 162, 188 224, 176 270 Z"
+        fill="#e08a3a"
+      />
+      <path
+        d="M186 270 C 178 212, 200 150, 230 116 C 240 108, 248 114, 244 126 C 232 172, 214 224, 204 270 Z"
+        fill="#f0c94a"
+      />
+      <path
+        d="M218 270 C 224 200, 260 142, 294 118 C 302 114, 308 122, 300 134 C 276 178, 246 224, 232 270 Z"
+        fill="#ffffff"
+      />
+      <text
+        x="225"
+        y="246"
+        textAnchor="middle"
+        fontFamily="Georgia, 'Times New Roman', serif"
+        fontSize="112"
+        fill="#ffffff"
+        letterSpacing="6"
+      >
+        C &amp; K
+      </text>
+      <text
+        x="225"
+        y="296"
+        textAnchor="middle"
+        fontFamily="Georgia, 'Times New Roman', serif"
+        fontSize="34"
+        fill="#c8384a"
+        letterSpacing="6"
+      >
+        PAINTING GROUP
+      </text>
+    </svg>
+  )
+}
+
 // ==================================================
 //                       APP
 // ==================================================
@@ -265,7 +322,12 @@ export default function App() {
       )}
 
       {tab === 'settings' && (
-        <Settings business={state.business} onChange={updateBusiness} />
+        <Settings
+          business={state.business}
+          nextInvoiceNumber={state.nextInvoiceNumber}
+          onChange={updateBusiness}
+          onChangeNextInvoiceNumber={(n) => setState((s) => ({ ...s, nextInvoiceNumber: n }))}
+        />
       )}
 
       <BottomNav
@@ -711,7 +773,7 @@ function InvoiceView({ job, business, onBack }) {
       <div className="invoice-doc" id="invoice-doc">
         <div className="invoice-head">
           <div className="invoice-brand">
-            <img src="./logo.svg" alt={business.name} className="invoice-logo" />
+            <Logo className="invoice-logo" />
             <div className="invoice-biz">
               <h2 className="biz-name">{business.name}</h2>
               {business.abn && <div className="muted">ABN: {business.abn}</div>}
@@ -799,7 +861,7 @@ function InvoiceView({ job, business, onBack }) {
 // ==================================================
 //                      SETTINGS
 // ==================================================
-function Settings({ business, onChange }) {
+function Settings({ business, nextInvoiceNumber, onChange, onChangeNextInvoiceNumber }) {
   return (
     <div className="screen">
       <div className="header">
@@ -821,6 +883,25 @@ function Settings({ business, onChange }) {
         <Field label="BSB" value={business.bsb} onChange={(v) => onChange({ bsb: v })} />
         <Field label="Account number" value={business.account} onChange={(v) => onChange({ account: v })} />
         <Field label="Accepted payment methods" value={business.paymentMethods} onChange={(v) => onChange({ paymentMethods: v })} />
+      </section>
+
+      <section className="section">
+        <h3>Invoice numbering</h3>
+        <label className="field">
+          <span>Next invoice number</span>
+          <input
+            className="input"
+            type="number"
+            inputMode="numeric"
+            min="1"
+            value={nextInvoiceNumber}
+            onChange={(e) => {
+              const v = parseInt(e.target.value, 10)
+              if (Number.isFinite(v) && v > 0) onChangeNextInvoiceNumber(v)
+            }}
+          />
+        </label>
+        <p className="muted small">The next invoice you generate will use this number, then count up.</p>
       </section>
 
       <section className="section">
